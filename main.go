@@ -6,6 +6,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -28,63 +29,73 @@ func main() {
 			"which are composed of manufacturer/product/serial.")
 	storageFilter := flag.String("storage", "", "regular expression to filter storage areas.")
 	android := flag.Bool("android", true, "use android extensions if available")
+	list := flag.Bool("list", false, "list avaliable mtp devices")
 	flag.Parse()
 
-	if len(flag.Args()) != 1 {
-		log.Fatalf("Usage: %s [options] MOUNT-POINT\n", os.Args[0])
-	}
-	mountpoint := flag.Arg(0)
+	if *list {
+		mtp.ListDevices()
+	} else {
 
-	dev, err := mtp.SelectDevice(*deviceFilter)
-	if err != nil {
-		log.Fatalf("detect failed: %v", err)
-	}
-	defer dev.Close()
-	debugs := map[string]bool{}
-	for _, s := range strings.Split(*debug, ",") {
-		debugs[s] = true
-	}
-	dev.MTPDebug = debugs["mtp"]
-	dev.DataDebug = debugs["data"]
-	dev.USBDebug = debugs["usb"]
-	dev.Timeout = *usbTimeout
-	if err = dev.Configure(); err != nil {
-		log.Fatalf("Configure failed: %v", err)
-	}
+		if len(flag.Args()) != 1 {
+			fmt.Println("Usage:")
+			fmt.Printf("	list : %s -list\n", os.Args[0])
+			fmt.Printf("	mount : %s [options]  [MOUNT-POINT]\n", os.Args[0])
+			os.Exit(1)
+		}
 
-	sids, err := fs.SelectStorages(dev, *storageFilter)
-	if err != nil {
-		log.Fatalf("selectStorages failed: %v", err)
-	}
+		mountpoint := flag.Arg(0)
 
-	opts := fs.DeviceFsOptions{
-		RemovableVFat: *vfat,
-		Android:       *android,
-	}
-	root, err := fs.NewDeviceFSRoot(dev, sids, opts)
-	if err != nil {
-		log.Fatalf("NewDeviceFs failed: %v", err)
-	}
+		dev, err := mtp.SelectDevice(*deviceFilter)
+		if err != nil {
+			log.Fatalf("detect failed: %v", err)
+		}
+		defer dev.Close()
+		debugs := map[string]bool{}
+		for _, s := range strings.Split(*debug, ",") {
+			debugs[s] = true
+		}
+		dev.MTPDebug = debugs["mtp"]
+		dev.DataDebug = debugs["data"]
+		dev.USBDebug = debugs["usb"]
+		dev.Timeout = *usbTimeout
+		if err = dev.Configure(); err != nil {
+			log.Fatalf("Configure failed: %v", err)
+		}
 
-	sec := time.Second
-	mountOpts := &fusefs.Options{
-		MountOptions: fuse.MountOptions{
-			SingleThreaded: true,
-			AllowOther:     *other,
-			Debug:          debugs["fuse"] || debugs["fs"],
-		},
-		UID:          uint32(syscall.Getuid()),
-		GID:          uint32(syscall.Getgid()),
-		AttrTimeout:  &sec,
-		EntryTimeout: &sec,
-	}
-	server, err := fusefs.Mount(mountpoint, root, mountOpts)
-	if err != nil {
-		log.Fatalf("mount failed: %v", err)
-	}
+		sids, err := fs.SelectStorages(dev, *storageFilter)
+		if err != nil {
+			log.Fatalf("selectStorages failed: %v", err)
+		}
 
-	server.WaitMount()
-	log.Printf("FUSE mounted")
-	server.Wait()
-	root.OnUnmount()
+		opts := fs.DeviceFsOptions{
+			RemovableVFat: *vfat,
+			Android:       *android,
+		}
+		root, err := fs.NewDeviceFSRoot(dev, sids, opts)
+		if err != nil {
+			log.Fatalf("NewDeviceFs failed: %v", err)
+		}
+
+		sec := time.Second
+		mountOpts := &fusefs.Options{
+			MountOptions: fuse.MountOptions{
+				SingleThreaded: true,
+				AllowOther:     *other,
+				Debug:          debugs["fuse"] || debugs["fs"],
+			},
+			UID:          uint32(syscall.Getuid()),
+			GID:          uint32(syscall.Getgid()),
+			AttrTimeout:  &sec,
+			EntryTimeout: &sec,
+		}
+		server, err := fusefs.Mount(mountpoint, root, mountOpts)
+		if err != nil {
+			log.Fatalf("mount failed: %v", err)
+		}
+
+		server.WaitMount()
+		log.Printf("FUSE mounted")
+		server.Wait()
+		root.OnUnmount()
+	}
 }

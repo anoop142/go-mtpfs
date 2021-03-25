@@ -2,6 +2,7 @@ package mtp
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 
@@ -143,4 +144,50 @@ func SelectDevice(pattern string) (*Device, error) {
 	}
 
 	return selectDevice(devs, pattern)
+}
+
+// printDevices prints id
+func printDevices(cands []*Device) {
+	var found []*Device
+
+	for _, cand := range cands {
+		if err := cand.Open(); err != nil {
+			continue
+		}
+
+		found = append(found, cand)
+	}
+
+	if len(found) == 0 {
+		log.Fatalf("no MTP devices found")
+	}
+
+	for _, cand := range found {
+		id, err := cand.ID()
+		if err != nil {
+			/*  ignore error */
+			cand.Close()
+			continue
+		}
+
+		fmt.Println(id)
+
+	}
+
+}
+
+// ListDevices list id of all mtp devices found
+func ListDevices() {
+	c := usb.NewContext()
+
+	devs, err := FindDevices(c)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if len(devs) == 0 {
+		log.Fatalln("no MTP devices found")
+	}
+
+	printDevices(devs)
+
 }
