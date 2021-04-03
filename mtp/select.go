@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"regexp"
-	"strings"
 
 	"github.com/hanwen/usb"
 )
@@ -91,10 +90,11 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 	cands = found
 	found = nil
 	var ids []string
+	deviceSelection := 0
 	for i, cand := range cands {
 		id, err := cand.ID()
 		if err != nil {
-			// TODO - close cands
+			cand.Close()
 			return nil, fmt.Errorf("Id dev %d: %v", i, err)
 		}
 
@@ -112,23 +112,27 @@ func selectDevice(cands []*Device, pattern string) (*Device, error) {
 	}
 
 	if len(found) > 1 {
-		return nil, fmt.Errorf("mtp: more than 1 device: %s", strings.Join(ids, ","))
+		fmt.Println("More than 1 device found!")
+		for i, id := range ids {
+			fmt.Printf("%d. %s\n", i, id)
+		}
+		fmt.Printf("Enter the device no : ")
+		fmt.Scanf("%v\n", &deviceSelection)
 	}
-
-	cand := found[0]
+	cand := found[deviceSelection]
 	config, err := cand.h.GetConfiguration()
 	if err != nil {
 		return nil, fmt.Errorf("could not get configuration of %v: %v",
-			ids[0], err)
+			ids[deviceSelection], err)
 	}
 	if config != cand.configValue {
 
 		if err := cand.h.SetConfiguration(cand.configValue); err != nil {
 			return nil, fmt.Errorf("could not set configuration of %v: %v",
-				ids[0], err)
+				ids[deviceSelection], err)
 		}
 	}
-	return found[0], nil
+	return found[deviceSelection], nil
 }
 
 // SelectDevice returns opened MTP device that matches the given pattern.
